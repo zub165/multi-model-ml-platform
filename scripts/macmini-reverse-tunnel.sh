@@ -52,11 +52,11 @@ SSH_COMMON_OPTS=(
 R_SPEC="127.0.0.1:${REMOTE_PORT}:127.0.0.1:${LOCAL_PORT}"
 
 if command -v autossh >/dev/null 2>&1; then
-  echo "[$(date -Iseconds)] Using autossh → ${VPS_USER}@${VPS_HOST}  -R ${R_SPEC}"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Using autossh → ${VPS_USER}@${VPS_HOST}  -R ${R_SPEC}"
   exec autossh -M 0 "${SSH_COMMON_OPTS[@]}" -R "${R_SPEC}" "${VPS_USER}@${VPS_HOST}"
 fi
 
-echo "[$(date -Iseconds)] autossh not found; using ssh (no auto-reconnect)."
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] autossh not found; using ssh (no auto-reconnect)."
 echo "Install: brew install autossh"
 echo "Running: ssh ... -R ${R_SPEC} ${VPS_USER}@${VPS_HOST}"
 exec ssh "${SSH_COMMON_OPTS[@]}" -R "${R_SPEC}" "${VPS_USER}@${VPS_HOST}"
