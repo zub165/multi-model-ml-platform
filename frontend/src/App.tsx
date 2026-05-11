@@ -245,7 +245,7 @@ export default function App() {
           <ul className="list">
             <li>
               <strong>GitHub build:</strong> set repository variable <code>VITE_API_URL</code> (Actions → Variables) to
-              your public API, e.g. <code>https://your-host:8002</code>, then re-run <em>Deploy frontend to GitHub
+              your public API, e.g. <code>https://your-host:8890</code>, then re-run <em>Deploy frontend to GitHub
               Pages</em>.
             </li>
             <li>
@@ -259,7 +259,7 @@ export default function App() {
           <input
             id="apiurl"
             className="input"
-            placeholder="https://your-vps-or-domain:8002"
+            placeholder="https://your-vps-or-domain:8890"
             value={browserUrlDraft}
             onChange={(e) => setBrowserUrlDraft(e.target.value)}
           />

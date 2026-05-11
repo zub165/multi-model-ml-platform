@@ -1,6 +1,6 @@
 """
 Multi-model ML API: registry, predictions, feedback storage, and optional retrain from labels.
-Run from backend dir: uvicorn main:app --host 0.0.0.0 --port $API_PORT
+Run from backend dir: uvicorn main:app --host 0.0.0.0 --port $API_PORT (default 8890 on VPS)
 """
 
 from __future__ import annotations
@@ -427,7 +427,7 @@ def retrain(req: RetrainRequest) -> Dict[str, Any]:
 def main() -> None:
     import uvicorn
 
-    port = _env_int("API_PORT", 8000)
+    port = _env_int("API_PORT", 8890)
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
 
 

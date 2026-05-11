@@ -1,7 +1,7 @@
 # Build the Vite React app and publish static files to GitHub Pages.
 # Prereqs: Settings → Pages → Source: "GitHub Actions".
 # Set repository variable VITE_API_URL (Settings → Secrets and variables → Actions → Variables)
-# to your public API origin, e.g. https://api.example.com or https://your-vps:8002 (HTTPS avoids mixed-content blocks).
+# to your public API origin, e.g. https://api.example.com or https://your-vps:8890 (HTTPS avoids mixed-content blocks).
 
 name: Deploy frontend to GitHub Pages
 

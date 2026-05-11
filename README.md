@@ -11,15 +11,21 @@ Monorepo for a **FastAPI** or **Django** multi-model registry (predictions, uplo
 
 ## Pick free ports (GoDaddy VPS)
 
+On many GoDaddy VPS images, **low ports** (`80`, `443`, `3306`) and the **`8000`–`8012` range** are often already taken. This repo’s **documented VPS defaults** use higher ports that are usually free; **always verify** on your box:
+
 ```bash
 bash scripts/list_listening_ports.sh
+# or on the VPS:
+ss -ltnp
 ```
 
-Choose unused ports, for example:
+Suggested defaults on the **VPS**:
 
-- **FastAPI**: `8001` (`uvicorn`)
-- **Django** (if you run it alongside): `8002` (`runserver` or `gunicorn`) — never reuse the FastAPI port.
-- **SPA dev or preview**: `5174` / `4174` (Vite), or serve `frontend/dist` with nginx on another free port (recommended in production).
+- **FastAPI**: **`8890`** (`uvicorn`)
+- **Django** (if you run it alongside): **`8891`** — never reuse the FastAPI port.
+- **SPA dev** (usually your Mac/PC, not the VPS): **`5174`** / **`4174`** (Vite), or serve `frontend/dist` behind **nginx on 443** in production.
+
+If **`8890` or `8891` is in use**, pick the next free port (e.g. `8892`, `8893`) and use the same value in `API_PORT`, `runserver`, `gunicorn --bind`, and `VITE_API_URL`.
 
 Do **not** bind two services to the same port.
 
@@ -27,33 +33,33 @@ Do **not** bind two services to the same port.
 
 Use this when the **GoDaddy VPS** (or another remote host) must call an API you run **only on your Mac** (e.g. `uvicorn` / Django on `localhost`). The SSH server on the VPS accepts connections on a **remote** port and forwards them to a port on your Mac.
 
-1. On the **VPS**, pick a **free** listen port (example uses `8001` — change if `ss -ltnp` shows it busy):
+1. On the **VPS**, pick a **free** listen port (example **`8892`** for the tunnel endpoint — change if `ss -ltnp` shows it busy):
 
    ```bash
-   ss -ltnp | grep ':8001'
+   ss -ltnp | grep ':8892'
    ```
 
-2. On your **Mac**, start the API on some local port (example `8000`):
+2. On your **Mac**, start the API on a local port (example **`8040`**, same as `scripts/macmini-setup.sh`):
 
    ```bash
    cd backend && source .venv/bin/activate
-   uvicorn main:app --host 127.0.0.1 --port 8000
+   uvicorn main:app --host 127.0.0.1 --port 8040
    ```
 
 3. From the **Mac**, open the reverse tunnel (replace `username`, host, and ports):
 
    ```bash
    ssh -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-     -R 8001:127.0.0.1:8000 username@YOUR_GODADDY_IP
+     -R 8892:127.0.0.1:8040 username@YOUR_GODADDY_IP
    ```
 
-   With the default OpenSSH settings, `-R 8001:…` is usually bound to **127.0.0.1 on the VPS only** (not the public internet). That is good for **curl/nginx on the same VPS** talking to `http://127.0.0.1:8001`. Changing `GatewayPorts` to expose the tunnel publicly is **risky** — avoid unless you fully understand the exposure.
+   With the default OpenSSH settings, `-R 8892:…` is usually bound to **127.0.0.1 on the VPS only** (not the public internet). That is good for **curl/nginx on the same VPS** talking to `http://127.0.0.1:8892`. Changing `GatewayPorts` to expose the tunnel publicly is **risky** — avoid unless you fully understand the exposure.
 
 4. On the **VPS**, call the API (this repo uses **`POST /predict`** with JSON, not `GET`):
 
    ```bash
-   curl -sS http://127.0.0.1:8001/health
-   curl -sS -X POST http://127.0.0.1:8001/predict \
+   curl -sS http://127.0.0.1:8892/health
+   curl -sS -X POST http://127.0.0.1:8892/predict \
      -H 'Content-Type: application/json' \
      -d '{"model_id":"ckd_risk","data":{"age":55,"diabetes":1,"systolic_bp":145,"creatinine":1.8,"proteinuria":2},"log_prediction":false}'
    ```
@@ -62,7 +68,7 @@ Use this when the **GoDaddy VPS** (or another remote host) must call an API you 
 
    ```bash
    autossh -M 0 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-     -N -R 8001:127.0.0.1:8000 username@YOUR_GODADDY_IP
+     -N -R 8892:127.0.0.1:8040 username@YOUR_GODADDY_IP
    ```
 
 The tunnel lasts **only while SSH stays connected**. For a durable setup, prefer **running the API on the VPS** or **systemd + autossh** on the Mac.
@@ -89,7 +95,7 @@ pip install -r requirements.txt
 cp .env.example .env   # optional: edit API_PORT / CORS_ORIGINS / paths
 export $(grep -v '^#' .env | xargs) 2>/dev/null || true
 # Place a trained ckd_model.pkl under backend/models/ or register via API
-uvicorn main:app --host 0.0.0.0 --port "${API_PORT:-8000}"
+uvicorn main:app --host 0.0.0.0 --port "${API_PORT:-8890}"
 ```
 
 Environment variables (see `backend/.env.example`):
@@ -112,7 +118,7 @@ cp .env.example .env   # optional: CORS_ORIGINS, MODEL_DIR, DJANGO_DB_PATH, SECR
 export $(grep -v '^#' .env | xargs) 2>/dev/null || true
 python manage.py migrate
 # Put trained pickles in django_backend/models/ (e.g. ckd_model.pkl) or use POST /register_model
-python manage.py runserver 0.0.0.0:8002
+python manage.py runserver 0.0.0.0:8891
 ```
 
 Environment variables (see `django_backend/.env.example`):
@@ -123,7 +129,7 @@ Environment variables (see `django_backend/.env.example`):
 
 Production example (pick a free port):
 
-`gunicorn ml_platform.wsgi:application --bind 0.0.0.0:8002`
+`gunicorn ml_platform.wsgi:application --bind 0.0.0.0:8891`
 
 ### Train a new model from CSV
 
@@ -142,7 +148,7 @@ The template is pinned to **Vite 5** so it builds cleanly on common Node 20 LTS 
 ```bash
 cd frontend
 cp .env.example .env.local
-# Default in .env.example targets Django on port 8002 locally; set to your VPS URL in production.
+# .env.example uses FastAPI default port 8890 locally; set to your VPS URL in production.
 npm install
 VITE_DEV_PORT=5174 npm run dev
 ```
@@ -173,12 +179,12 @@ git push -u origin main
 Workflow: `.github/workflows/deploy-frontend-pages.yml` (runs on pushes to `main` / `master` that touch `frontend/`).
 
 1. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. **Settings → Secrets and variables → Actions → Variables** → add **`VITE_API_URL`** with your **public** API base (no trailing slash), e.g. `https://your-domain:8002`.  
+2. **Settings → Secrets and variables → Actions → Variables** → add **`VITE_API_URL`** with your **public** API base (no trailing slash), e.g. `https://your-domain:8890`.  
    - If the site is served over **HTTPS**, the API should also be **HTTPS**; otherwise the browser may block requests (mixed content).  
 3. **CORS**: add your Pages origin to the API, e.g. `https://<owner>.github.io` or `https://<owner>.github.io/<repo>/` in `CORS_ORIGINS` / Django `CORS_ALLOWED_ORIGINS`.
 4. Push to `main`; the **Actions** tab should show **Deploy frontend to GitHub Pages**. Your site URL appears in the workflow run and under **Pages**.
 
-Local dev stays linked to Django on **8002** via `frontend/.env.example` → copy to `.env.local`.
+Local dev uses **`frontend/.env.example`** (FastAPI on **8890** by default) → copy to `.env.local` and change if your API port differs.
 
 **GitHub Pages:** if you did not bake `VITE_API_URL` at build time, the SPA can still prompt for an API URL; it saves **`ML_API_BASE_URL`** in the browser’s `localStorage` (HTTPS API recommended when the site is HTTPS).
 
