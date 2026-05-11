@@ -194,6 +194,78 @@ Local dev uses **`frontend/.env.example`** (FastAPI on **8890** by default) → 
 
 **GitHub Pages:** if you did not bake `VITE_API_URL` at build time, the SPA can still prompt for an API URL; it saves **`ML_API_BASE_URL`** in the browser’s `localStorage` (HTTPS API recommended when the site is HTTPS).
 
+## Settings (all in one place)
+
+Copy the example env files, then edit:
+
+| File | Command |
+|------|---------|
+| FastAPI | `cp backend/.env.example backend/.env` |
+| Django | `cp django_backend/.env.example django_backend/.env` |
+| React (local) | `cp frontend/.env.example frontend/.env.local` |
+
+Load into your shell on Linux/VPS (optional):
+
+```bash
+set -a && source backend/.env && set +a   # from repo root, path as needed
+```
+
+### FastAPI (`backend/.env`)
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `API_PORT` | Port `uvicorn` / `python main.py` listens on | `8890` |
+| `DB_PATH` | SQLite file for prediction log + feedback | *(default under `backend/data/`)* |
+| `MODEL_DIR` | Directory for `.pkl` files | *(default `backend/models`)* |
+| `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API | `http://127.0.0.1:5174,https://zub165.github.io` |
+
+### Django (`django_backend/.env`)
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `DJANGO_SECRET_KEY` | Django secret | long random string in production |
+| `DJANGO_DEBUG` | `1` dev, `0` production | `0` on VPS public |
+| `ALLOWED_HOSTS` | Comma hostnames | `yourdomain.com,www.yourdomain.com` |
+| `DJANGO_DB_PATH` | SQLite path for ORM | *(optional; default `django_backend/data/`)* |
+| `MODEL_DIR` | `.pkl` directory | *(default `django_backend/models`)* |
+| `CORS_ORIGINS` | Same idea as FastAPI | match your React / GitHub Pages origin |
+
+Run Django on a **different port** than FastAPI, e.g. **`8891`**:  
+`python manage.py runserver 0.0.0.0:8891`
+
+### React (`frontend/.env.local` + browser)
+
+| Variable / key | Purpose | Example |
+|----------------|---------|---------|
+| `VITE_API_URL` | API base URL (no trailing slash), baked in at **build** time | `http://127.0.0.1:8890` or `https://api.yourdomain.com:8890` |
+| `VITE_DEV_PORT` | Local Vite dev port | `5174` |
+| `VITE_PREVIEW_PORT` | `vite preview` port | `4174` |
+| `VITE_BASE_PATH` | Subpath for GitHub Pages (usually set by CI only) | `/multi-model-ml-platform/` |
+| `localStorage` **`ML_API_BASE_URL`** | Set from the SPA “Connect” screen (GitHub Pages) without rebuilding | same as `VITE_API_URL` |
+
+### GitHub Actions (repository **Variables**)
+
+| Name | Purpose |
+|------|---------|
+| `VITE_API_URL` | Public API URL for the Pages build (HTTPS if the site is HTTPS) |
+
+### Mac mini scripts (environment or arguments)
+
+| Script | Variables / args |
+|--------|-------------------|
+| `scripts/macmini-setup.sh` | `API_PORT` (default `8040`), `FE_PORT` (default `5174`) |
+| `scripts/macmini-reverse-tunnel.sh` | Positional: `user host [remote_port] [local_port]` **or** `VPS_USER`, `VPS_HOST`, `REMOTE_PORT` (default `8892`), `LOCAL_PORT` (default `8040`) |
+
+### VPS firewall (if `ufw` is enabled)
+
+```bash
+sudo ufw allow 8890/tcp comment 'FastAPI ML API'
+sudo ufw allow 8891/tcp comment 'Django ML API'
+sudo ufw status
+```
+
+Replace ports if you changed them. **SSH (22)** must stay allowed for tunnels.
+
 ## Learning loop (how the frontend “teaches” the backend)
 
 1. Clinician runs **predict** → optional row in `prediction_log`.
