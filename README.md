@@ -23,6 +23,50 @@ Choose unused ports, for example:
 
 Do **not** bind two services to the same port.
 
+## SSH reverse tunnel (VPS reaches your Mac API)
+
+Use this when the **GoDaddy VPS** (or another remote host) must call an API you run **only on your Mac** (e.g. `uvicorn` / Django on `localhost`). The SSH server on the VPS accepts connections on a **remote** port and forwards them to a port on your Mac.
+
+1. On the **VPS**, pick a **free** listen port (example uses `8001` — change if `ss -ltnp` shows it busy):
+
+   ```bash
+   ss -ltnp | grep ':8001'
+   ```
+
+2. On your **Mac**, start the API on some local port (example `8000`):
+
+   ```bash
+   cd backend && source .venv/bin/activate
+   uvicorn main:app --host 127.0.0.1 --port 8000
+   ```
+
+3. From the **Mac**, open the reverse tunnel (replace `username`, host, and ports):
+
+   ```bash
+   ssh -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+     -R 8001:127.0.0.1:8000 username@YOUR_GODADDY_IP
+   ```
+
+   With the default OpenSSH settings, `-R 8001:…` is usually bound to **127.0.0.1 on the VPS only** (not the public internet). That is good for **curl/nginx on the same VPS** talking to `http://127.0.0.1:8001`. Changing `GatewayPorts` to expose the tunnel publicly is **risky** — avoid unless you fully understand the exposure.
+
+4. On the **VPS**, call the API (this repo uses **`POST /predict`** with JSON, not `GET`):
+
+   ```bash
+   curl -sS http://127.0.0.1:8001/health
+   curl -sS -X POST http://127.0.0.1:8001/predict \
+     -H 'Content-Type: application/json' \
+     -d '{"model_id":"ckd_risk","data":{"age":55,"diabetes":1,"systolic_bp":145,"creatinine":1.8,"proteinuria":2},"log_prediction":false}'
+   ```
+
+5. **Keep the tunnel up** (Mac): `autossh` reconnects if SSH drops (install with Homebrew: `brew install autossh`):
+
+   ```bash
+   autossh -M 0 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+     -N -R 8001:127.0.0.1:8000 username@YOUR_GODADDY_IP
+   ```
+
+The tunnel lasts **only while SSH stays connected**. For a durable setup, prefer **running the API on the VPS** or **systemd + autossh** on the Mac.
+
 ## Backend developer brief
 
 Build and run a **multi-model ML API** that:
