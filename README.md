@@ -79,6 +79,19 @@ Use this when the **GoDaddy VPS** (or another remote host) must call an API you 
 
 The tunnel lasts **only while SSH stays connected**. For a durable setup, prefer **running the API on the VPS** or **systemd + autossh** on the Mac.
 
+### Reverse tunnel troubleshooting
+
+| Symptom | Likely cause | What to do |
+|--------|----------------|------------|
+| `No such file` for `~/scripts/macmini-reverse-tunnel.sh` | Script lives **inside the git repo**, not in `$HOME/scripts` | `bash ~/multi-model-ml-platform/scripts/macmini-reverse-tunnel.sh …` (adjust clone path). |
+| You ran the script **on the VPS** | The tunnel must run on the **Mac** | Open a new terminal **on the Mac** and run it there. |
+| `Permission denied (password)` | Wrong password, or keyboard layout / caps | Same password as `ssh user@host` from the Mac. Password is **invisible** when typed. Prefer **`ssh-copy-id user@host`** once, then tunnel uses keys. |
+| `connect to host … port 22: Connection refused` | SSH not on 22 from your network, host firewall, or provider rules | In GoDaddy panel check **SSH port** (sometimes **2222**). On Mac: `nc -vz YOUR_HOST 22` (and try **2222**). Pass port: `SSH_PORT=2222 bash …/macmini-reverse-tunnel.sh user host 8892 8040` or 5th arg `… 8892 8040 2222`. |
+| `curl … 8892: Connection refused` on VPS | Tunnel not running on Mac, or Mac API not on `8040` | Keep Mac tunnel terminal open; confirm `uvicorn` on `127.0.0.1:8040`. |
+| Wrong JSON from `curl /` | Different app than this repo | This project’s `GET /` returns `Multi-Model ML Prediction API` in JSON. Use `GET /health` for a quick check. |
+
+**Privacy:** avoid pasting your VPS IP, passwords, or keys in public chats—rotate credentials if they were exposed.
+
 ## Backend developer brief
 
 Build and run a **multi-model ML API** that:
@@ -254,7 +267,7 @@ Run Django on a **different port** than FastAPI, e.g. **`8891`**:
 | Script | Variables / args |
 |--------|-------------------|
 | `scripts/macmini-setup.sh` | `API_PORT` (default `8040`), `FE_PORT` (default `5174`) |
-| `scripts/macmini-reverse-tunnel.sh` | Positional: `user host [remote_port] [local_port]` **or** `VPS_USER`, `VPS_HOST`, `REMOTE_PORT` (default `8892`), `LOCAL_PORT` (default `8040`) |
+| `scripts/macmini-reverse-tunnel.sh` | Positional: `user host [remote_port] [local_port] [ssh_port]` **or** env: `VPS_USER`, `VPS_HOST`, `REMOTE_PORT` (default `8892`), `LOCAL_PORT` (default `8040`), `SSH_PORT` (default `22`) |
 
 ### VPS firewall (if `ufw` is enabled)
 
