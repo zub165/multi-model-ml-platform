@@ -1,0 +1,69 @@
+# Build the Vite React app and publish static files to GitHub Pages.
+# Prereqs: Settings → Pages → Source: "GitHub Actions".
+# Set repository variable VITE_API_URL (Settings → Secrets and variables → Actions → Variables)
+# to your public API origin, e.g. https://api.example.com or https://your-vps:8002 (HTTPS avoids mixed-content blocks).
+
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute Vite base path for GitHub Pages
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          OWNER="${{ github.repository_owner }}"
+          if [ "$REPO" = "$OWNER.github.io" ]; then
+            echo "VITE_BASE_PATH=/" >> "$GITHUB_ENV"
+          else
+            echo "VITE_BASE_PATH=/${REPO}/" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          if [ -z "${VITE_API_URL:-}" ]; then
+            echo "::error::Set the Actions repository variable VITE_API_URL (e.g. https://your-host:8002) under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+          npm ci
+          npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -97,7 +97,7 @@ The template is pinned to **Vite 5** so it builds cleanly on common Node 20 LTS 
 ```bash
 cd frontend
 cp .env.example .env.local
-# Set VITE_API_URL to http://VPS_IP:API_PORT
+# Default in .env.example targets Django on port 8002 locally; set to your VPS URL in production.
 npm install
 VITE_DEV_PORT=5174 npm run dev
 ```
@@ -112,18 +112,28 @@ VITE_PREVIEW_PORT=4174 npm run preview
 
 For production on the VPS, prefer **nginx** (or Caddy) to serve `frontend/dist` on one port and **proxy** `/predict` etc. to uvicorn, or keep split origins and tighten `CORS_ORIGINS`.
 
-## GitHub
+## GitHub (code + Pages for the React app)
+
+### Push this repository
 
 ```bash
 cd /path/to/multi-model-ml-platform
-git init
-git add .
-git commit -m "Initial multi-model ML API and React workspace"
-# Create an empty repo on GitHub, then:
 git remote add origin https://github.com/<you>/<repo>.git
 git branch -M main
 git push -u origin main
 ```
+
+### Deploy the frontend to GitHub Pages
+
+Workflow: `.github/workflows/deploy-frontend-pages.yml` (runs on pushes to `main` / `master` that touch `frontend/`).
+
+1. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. **Settings → Secrets and variables → Actions → Variables** → add **`VITE_API_URL`** with your **public** API base (no trailing slash), e.g. `https://your-domain:8002`.  
+   - If the site is served over **HTTPS**, the API should also be **HTTPS**; otherwise the browser may block requests (mixed content).  
+3. **CORS**: add your Pages origin to the API, e.g. `https://<owner>.github.io` or `https://<owner>.github.io/<repo>/` in `CORS_ORIGINS` / Django `CORS_ALLOWED_ORIGINS`.
+4. Push to `main`; the **Actions** tab should show **Deploy frontend to GitHub Pages**. Your site URL appears in the workflow run and under **Pages**.
+
+Local dev stays linked to Django on **8002** via `frontend/.env.example` → copy to `.env.local`.
 
 ## Learning loop (how the frontend “teaches” the backend)
 
