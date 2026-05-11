@@ -41,6 +41,20 @@ if [[ -z "${VPS_USER}" || -z "${VPS_HOST}" ]]; then
   exit 1
 fi
 
+# Catch README-style placeholders so ssh does not try to resolve nonsense hostnames.
+_lc_host=$(echo "${VPS_HOST}" | tr '[:upper:]' '[:lower:]')
+_lc_user=$(echo "${VPS_USER}" | tr '[:upper:]' '[:lower:]')
+if [[ "${_lc_host}" == *your*vps* || "${_lc_host}" == *changeme* || "${_lc_host}" == example.com ]]; then
+  echo "ERROR: VPS_HOST looks like a placeholder: '${VPS_HOST}'" >&2
+  echo "Use your real GoDaddy VPS address: public IPv4 (e.g. 203.0.113.50) or SSH hostname from hosting panel." >&2
+  exit 1
+fi
+if [[ "${_lc_user}" == *your*vps* || "${_lc_user}" == *changeme* ]]; then
+  echo "ERROR: VPS_USER looks like a placeholder: '${VPS_USER}'" >&2
+  echo "Use the real Linux SSH username on the VPS (often not the same as your GoDaddy account email)." >&2
+  exit 1
+fi
+
 SSH_COMMON_OPTS=(
   -N
   -o ServerAliveInterval=30
