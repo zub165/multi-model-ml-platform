@@ -28,6 +28,7 @@ Do **not** bind two services to the same port.
 Build and run a **multi-model ML API** that:
 
 - Hosts many `.pkl` models behind one **`POST /predict`** contract (`model_id` + feature dict).
+- Trains from an uploaded CSV via **`POST /train`** (multipart: `file`, `model_id`, `target_column`, `model_type`, optional `description`), then registers the new artifact.
 - Exposes **`GET /models`** and **`GET /models/{model_id}`** for metadata (feature order matters).
 - Supports **`POST /register_model`** (multipart upload) for new models without redeploying code paths.
 - Persists **clinician feedback** via **`POST /feedback`** (features + `actual_outcome`) into SQLite.
@@ -134,6 +135,8 @@ Workflow: `.github/workflows/deploy-frontend-pages.yml` (runs on pushes to `main
 4. Push to `main`; the **Actions** tab should show **Deploy frontend to GitHub Pages**. Your site URL appears in the workflow run and under **Pages**.
 
 Local dev stays linked to Django on **8002** via `frontend/.env.example` → copy to `.env.local`.
+
+**GitHub Pages:** if you did not bake `VITE_API_URL` at build time, the SPA can still prompt for an API URL; it saves **`ML_API_BASE_URL`** in the browser’s `localStorage` (HTTPS API recommended when the site is HTTPS).
 
 ## Learning loop (how the frontend “teaches” the backend)
 

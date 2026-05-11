@@ -5,6 +5,7 @@ Run from backend dir: uvicorn main:app --host 0.0.0.0 --port $API_PORT
 
 from __future__ import annotations
 
+import io
 import json
 import os
 from contextlib import asynccontextmanager
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from storage import Storage
+from train_any_model import train_model_from_dataframe
 
 
 def _env_int(name: str, default: int) -> int:
@@ -187,7 +189,47 @@ def root() -> Dict[str, Any]:
             "/feedback",
             "/retrain",
             "/stats/{model_id}",
+            "/train",
         ],
+    }
+
+
+@app.post("/train")
+async def train_from_csv(
+    model_id: str = Form(...),
+    target_column: str = Form(...),
+    model_type: str = Form(...),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+) -> Dict[str, Any]:
+    """Train RandomForest from an uploaded CSV and register the artifact under model_id."""
+    raw = await file.read()
+    try:
+        df = pd.read_csv(io.BytesIO(raw))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV: {e}") from e
+    if model_type not in ("classification", "regression"):
+        raise HTTPException(status_code=400, detail="model_type must be classification or regression")
+    try:
+        model, meta = train_model_from_dataframe(df, target_column, model_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = MODEL_DIR / f"{model_id}.pkl"
+    meta_path = MODEL_DIR / f"{model_id}_metadata.json"
+    joblib.dump(model, out_path)
+    meta_out = {**meta, "model_id": model_id}
+    meta_path.write_text(json.dumps(meta_out, indent=2), encoding="utf-8")
+
+    desc = description.strip() or f"Trained from CSV upload ({meta['n_samples']} rows)"
+    registry.register_model(model_id, str(out_path), model_type, list(meta["features"]), desc)
+
+    return {
+        "message": "Trained and registered",
+        "model_id": model_id,
+        "metadata": meta_out,
+        "artifact": str(out_path),
     }
 
 

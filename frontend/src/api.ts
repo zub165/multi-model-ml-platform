@@ -1,4 +1,23 @@
-const base = () => (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+function stripTrailingSlash(s: string): string {
+  return s.replace(/\/$/, '')
+}
+
+/** Build-time env, or browser override for GitHub Pages (`ML_API_BASE_URL` in localStorage). */
+export function getApiBase(): string {
+  const env = (import.meta.env.VITE_API_URL ?? '').trim()
+  if (env) return stripTrailingSlash(env)
+  if (typeof window === 'undefined') return ''
+  return stripTrailingSlash((localStorage.getItem('ML_API_BASE_URL') ?? '').trim())
+}
+
+export function setBrowserApiBase(url: string): void {
+  const t = url.trim()
+  if (!t) {
+    localStorage.removeItem('ML_API_BASE_URL')
+    return
+  }
+  localStorage.setItem('ML_API_BASE_URL', stripTrailingSlash(t))
+}
 
 function formatDetail(data: unknown): string {
   if (!data || typeof data !== 'object') return 'Request failed'
@@ -23,14 +42,14 @@ async function parseJson(res: Response) {
 }
 
 export async function fetchModels() {
-  const res = await fetch(`${base()}/models`)
+  const res = await fetch(`${getApiBase()}/models`)
   const data = await parseJson(res)
   if (!res.ok) throw new Error(formatDetail(data))
   return data as { models: { model_id: string; info: Record<string, unknown> }[] }
 }
 
 export async function fetchModel(modelId: string) {
-  const res = await fetch(`${base()}/models/${encodeURIComponent(modelId)}`)
+  const res = await fetch(`${getApiBase()}/models/${encodeURIComponent(modelId)}`)
   const data = await parseJson(res)
   if (!res.ok) throw new Error(formatDetail(data))
   return data as {
@@ -49,7 +68,7 @@ export async function predict(payload: {
   return_proba?: boolean
   log_prediction?: boolean
 }) {
-  const res = await fetch(`${base()}/predict`, {
+  const res = await fetch(`${getApiBase()}/predict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -76,7 +95,7 @@ export async function submitFeedback(payload: {
   actual_outcome: number
   predicted?: number
 }) {
-  const res = await fetch(`${base()}/feedback`, {
+  const res = await fetch(`${getApiBase()}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -87,14 +106,14 @@ export async function submitFeedback(payload: {
 }
 
 export async function fetchStats(modelId: string) {
-  const res = await fetch(`${base()}/stats/${encodeURIComponent(modelId)}`)
+  const res = await fetch(`${getApiBase()}/stats/${encodeURIComponent(modelId)}`)
   const data = await parseJson(res)
   if (!res.ok) throw new Error(formatDetail(data))
   return data as { model_id: string; labeled_feedback_rows: number }
 }
 
 export async function retrain(modelId: string, minSamples = 10) {
-  const res = await fetch(`${base()}/retrain`, {
+  const res = await fetch(`${getApiBase()}/retrain`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model_id: modelId, min_samples: minSamples }),
@@ -102,4 +121,19 @@ export async function retrain(modelId: string, minSamples = 10) {
   const data = await parseJson(res)
   if (!res.ok) throw new Error(formatDetail(data))
   return data as { message: string; samples_used: number; artifact: string }
+}
+
+export async function trainFromCsv(form: FormData) {
+  const res = await fetch(`${getApiBase()}/train`, {
+    method: 'POST',
+    body: form,
+  })
+  const data = await parseJson(res)
+  if (!res.ok) throw new Error(formatDetail(data))
+  return data as {
+    message: string
+    model_id: string
+    metadata: Record<string, unknown>
+    artifact: string
+  }
 }

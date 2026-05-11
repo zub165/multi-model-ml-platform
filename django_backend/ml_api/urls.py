@@ -10,6 +10,7 @@ urlpatterns = [
     path("models", views.list_models),
     path("models/<str:model_id>", views.model_detail),
     path("register_model", views.register_model),
+    path("train", views.train_from_csv),
     path("feedback", views.feedback),
     path("retrain", views.retrain),
     path("stats/<str:model_id>", views.stats),

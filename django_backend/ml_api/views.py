@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 from typing import Any, Dict, List
 
@@ -12,8 +13,9 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
-from ml_api.registry import registry
 from ml_api import services
+from ml_api.registry import registry
+from ml_api.training import train_model_from_dataframe
 
 
 def _detail(msg: str, status: int = 400) -> JsonResponse:
@@ -43,6 +45,7 @@ def root(_request: HttpRequest) -> JsonResponse:
                 "/feedback",
                 "/retrain",
                 "/stats/{model_id}",
+                "/train",
             ],
         }
     )
@@ -235,6 +238,54 @@ def stats(_request: HttpRequest, model_id: str) -> JsonResponse:
         return _detail(f"Model '{model_id}' not found", 404)
     return JsonResponse(
         {"model_id": model_id, "labeled_feedback_rows": services.feedback_count(model_id)}
+    )
+
+
+@csrf_exempt
+def train_from_csv(request: HttpRequest) -> JsonResponse:
+    if request.method != "POST":
+        return _detail("Method not allowed", 405)
+
+    model_id = request.POST.get("model_id")
+    target_column = request.POST.get("target_column")
+    model_type = request.POST.get("model_type")
+    description = (request.POST.get("description") or "").strip()
+    upload = request.FILES.get("file")
+
+    if not model_id or not target_column or not model_type or not upload:
+        return _detail("model_id, target_column, model_type, and file are required", 400)
+    if model_type not in ("classification", "regression"):
+        return _detail("model_type must be classification or regression", 400)
+
+    raw = upload.read()
+    try:
+        df = pd.read_csv(io.BytesIO(raw))
+    except Exception as e:
+        return _detail(f"Invalid CSV: {e}", 400)
+
+    try:
+        model, meta = train_model_from_dataframe(df, target_column, model_type)
+    except ValueError as e:
+        return _detail(str(e), 400)
+
+    model_dir = settings.MODEL_DIR
+    model_dir.mkdir(parents=True, exist_ok=True)
+    out_path = model_dir / f"{model_id}.pkl"
+    meta_path = model_dir / f"{model_id}_metadata.json"
+    joblib.dump(model, out_path)
+    meta_out = {**meta, "model_id": model_id}
+    meta_path.write_text(json.dumps(meta_out, indent=2), encoding="utf-8")
+
+    desc = description or f"Trained from CSV upload ({meta['n_samples']} rows)"
+    registry.register_model(model_id, str(out_path), model_type, list(meta["features"]), desc)
+
+    return JsonResponse(
+        {
+            "message": "Trained and registered",
+            "model_id": model_id,
+            "metadata": meta_out,
+            "artifact": str(out_path),
+        }
     )
 
 
