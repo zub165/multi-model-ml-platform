@@ -46,7 +46,13 @@ Use this when the **GoDaddy VPS** (or another remote host) must call an API you 
    uvicorn main:app --host 127.0.0.1 --port 8040
    ```
 
-3. From the **Mac**, open the reverse tunnel (replace `username`, host, and ports):
+3. From the **Mac**, open the reverse tunnel (replace user/host; or use **`scripts/macmini-reverse-tunnel.sh`**):
+
+   ```bash
+   bash scripts/macmini-reverse-tunnel.sh YOUR_USER YOUR_VPS_IP 8892 8040
+   ```
+
+   Same thing manually:
 
    ```bash
    ssh -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
