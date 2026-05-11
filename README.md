@@ -1,10 +1,11 @@
 # Multi-model ML API platform
 
-Monorepo for a **FastAPI** multi-model registry (predictions, uploads, batch) plus a **React (Vite)** clinician workspace that records **labeled feedback** and can trigger **retrain** from stored outcomes.
+Monorepo for a **FastAPI** or **Django** multi-model registry (predictions, uploads, batch) plus a **React (Vite)** clinician workspace that records **labeled feedback** and can trigger **retrain** from stored outcomes. Both backends expose the **same URL paths and JSON payloads**, so `VITE_API_URL` can point at either stack (on different ports).
 
 ## Repository layout
 
 - `backend/` — FastAPI app (`main.py`), SQLite storage (`storage.py`), training helper (`train_any_model.py`), `models/` for `.pkl` files.
+- `django_backend/` — Django project `ml_platform` + app `ml_api` (ORM-backed feedback/logs, same routes as FastAPI).
 - `frontend/` — React SPA; reads `VITE_API_URL` at build/dev time.
 - `scripts/list_listening_ports.sh` — print listening TCP ports so you can pick **free** ports on the VPS.
 
@@ -14,9 +15,10 @@ Monorepo for a **FastAPI** multi-model registry (predictions, uploads, batch) pl
 bash scripts/list_listening_ports.sh
 ```
 
-Choose two unused ports, for example:
+Choose unused ports, for example:
 
-- **API**: `8001` (uvicorn)
+- **FastAPI**: `8001` (`uvicorn`)
+- **Django** (if you run it alongside): `8002` (`runserver` or `gunicorn`) — never reuse the FastAPI port.
 - **SPA dev or preview**: `5174` / `4174` (Vite), or serve `frontend/dist` with nginx on another free port (recommended in production).
 
 Do **not** bind two services to the same port.
@@ -51,6 +53,32 @@ Environment variables (see `backend/.env.example`):
 - `MODEL_DIR` — where `.pkl` files live (default: `backend/models`).
 - `DB_PATH` — SQLite file (default: `backend/data/ml_platform.db`).
 - `CORS_ORIGINS` — comma-separated list, must include your React URL.
+
+### Django backend (same API contract)
+
+Use this if you prefer **Django** (e.g. Corus-style deployments) while keeping the React client unchanged.
+
+```bash
+cd django_backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # optional: CORS_ORIGINS, MODEL_DIR, DJANGO_DB_PATH, SECRET_KEY
+export $(grep -v '^#' .env | xargs) 2>/dev/null || true
+python manage.py migrate
+# Put trained pickles in django_backend/models/ (e.g. ckd_model.pkl) or use POST /register_model
+python manage.py runserver 0.0.0.0:8002
+```
+
+Environment variables (see `django_backend/.env.example`):
+
+- `DJANGO_DB_PATH` — SQLite file for Django ORM (default: `django_backend/data/django_ml.db`; parent dir is created automatically).
+- `MODEL_DIR` — `.pkl` directory (default: `django_backend/models`).
+- `CORS_ORIGINS` — same semantics as the FastAPI stack.
+
+Production example (pick a free port):
+
+`gunicorn ml_platform.wsgi:application --bind 0.0.0.0:8002`
 
 ### Train a new model from CSV
 
