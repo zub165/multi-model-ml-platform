@@ -53,8 +53,7 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: |
           if [ -z "${VITE_API_URL:-}" ]; then
-            echo "::error::Set the Actions repository variable VITE_API_URL (e.g. https://your-host:8002) under Settings → Secrets and variables → Actions → Variables."
-            exit 1
+            echo "::warning::VITE_API_URL is unset. The SPA will build without a baked-in API URL (configure screen in the app). Set repo variable VITE_API_URL and re-run this workflow to point at your live API."
           fi
           npm ci
           npm run build
