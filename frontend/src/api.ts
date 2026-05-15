@@ -40,11 +40,18 @@ export function buildConnectionPresets(): ConnectionPreset[] {
     },
     {
       id: 'godaddy-remote',
-      label: 'GoDaddy — browser on your laptop',
-      blurb: 'ML API on the public host; open firewall for 8890. Ollama stays localhost-only unless you add a proxy or tunnel.',
+      label: 'GoDaddy — HTTPS via nginx',
+      blurb: 'Production API behind nginx + Let’s Encrypt (GitHub Pages and remote browsers).',
+      mlApi: 'https://api.docsoncalls.com/ml',
+      ollama: 'http://127.0.0.1:11434',
+      note: 'Ollama stays on localhost unless you add a separate proxy. ML calls use HTTPS — safe for GitHub Pages.',
+    },
+    {
+      id: 'godaddy-http-legacy',
+      label: 'GoDaddy — direct HTTP :8890',
+      blurb: 'Bypass nginx (blocked from HTTPS sites like GitHub Pages due to mixed content).',
       mlApi: `http://${pub}:8890`,
       ollama: 'http://127.0.0.1:11434',
-      note: 'Remote browsers cannot reach Ollama on 127.0.0.1 at the VPS. Use the Mac preset on your Mac, or expose Ollama via nginx/SSH.',
     },
     {
       id: 'mac-local',
