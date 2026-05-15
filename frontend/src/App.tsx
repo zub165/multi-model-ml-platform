@@ -1,20 +1,382 @@
-import { useCallback, useEffect, useReducer, useState } from 'react'
+import { useCallback, useEffect, useReducer, useState, type ReactNode } from 'react'
 import {
+  buildConnectionPresets,
   fetchModel,
   fetchModels,
   fetchStats,
   getApiBase,
+  getOllamaBase,
+  PORT_REFERENCE,
   predict,
+  probeMlApi,
+  probeOllama,
   retrain,
   setBrowserApiBase,
+  setOllamaBase,
   submitFeedback,
   trainFromCsv,
+  type ConnectionPreset,
+  type ProbeResult,
 } from './api'
 import './App.css'
 
 type ModelRow = { model_id: string; info: { description?: string } }
 
-type Tab = 'predict' | 'train'
+type Tab = 'predict' | 'train' | 'connect'
+
+type ProbeState = ProbeResult | null | 'loading'
+
+function IconBrain() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 2a4 4 0 0 1 4 4v1a3 3 0 0 1 3 3 3 3 0 0 1-1 2.2V14a4 4 0 0 1-8 0v-1.8A3 3 0 0 1 7 10a3 3 0 0 1 3-3V6a4 4 0 0 1 4-4z" />
+      <path d="M9 18v2M15 18v2M10 22h4" />
+    </svg>
+  )
+}
+
+function IconChart() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M3 3v18h18M7 16l4-6 4 3 5-8" />
+    </svg>
+  )
+}
+
+function IconUpload() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 3v12M8 7l4-4 4 4M4 21h16" />
+    </svg>
+  )
+}
+
+function IconLink() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  )
+}
+
+function presetBadge(id: string): { className: string; label: string } {
+  if (id.startsWith('godaddy')) return { className: 'godaddy', label: 'GoDaddy VPS' }
+  if (id.includes('tunnel')) return { className: 'tunnel', label: 'SSH tunnel' }
+  return { className: 'mac', label: 'Mac mini' }
+}
+
+function AppShell({
+  tab,
+  setTab,
+  children,
+}: {
+  tab: Tab
+  setTab: (t: Tab) => void
+  children: ReactNode
+}) {
+  const ml = getApiBase()
+  const ollama = getOllamaBase()
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon">
+            <IconBrain />
+          </div>
+          <div className="brand-text">
+            <h1>Clinical ML</h1>
+            <span>AI Workspace</span>
+          </div>
+        </div>
+        <nav className="side-nav" aria-label="Main">
+          <button
+            type="button"
+            className={tab === 'predict' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setTab('predict')}
+          >
+            <IconChart />
+            Predict &amp; feedback
+          </button>
+          <button
+            type="button"
+            className={tab === 'train' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setTab('train')}
+          >
+            <IconUpload />
+            Train from CSV
+          </button>
+          <button
+            type="button"
+            className={tab === 'connect' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setTab('connect')}
+          >
+            <IconLink />
+            Connections
+          </button>
+        </nav>
+        <div className="side-status">
+          <div className="status-row">
+            <span className={`status-dot ${ml ? 'on' : 'off'}`} />
+            <div>
+              <div className="label">ML API</div>
+              <code>{ml || 'not set'}</code>
+            </div>
+          </div>
+          <div className="status-row">
+            <span className={`status-dot ${ollama ? 'on' : 'off'}`} />
+            <div>
+              <div className="label">Ollama / Llama</div>
+              <code>{ollama || 'not set'}</code>
+            </div>
+          </div>
+        </div>
+      </aside>
+      <main className="main">{children}</main>
+    </div>
+  )
+}
+
+function ConnectPanel({
+  requireMl,
+  embedded,
+  onConnected,
+}: {
+  requireMl: boolean
+  embedded?: boolean
+  onConnected: () => void
+}) {
+  const presets = buildConnectionPresets()
+  const [mlDraft, setMlDraft] = useState(() => getApiBase())
+  const [ollamaDraft, setOllamaDraft] = useState(() => getOllamaBase())
+  const [activePreset, setActivePreset] = useState<string | null>(null)
+  const [mlProbe, setMlProbe] = useState<ProbeState>(null)
+  const [ollamaProbe, setOllamaProbe] = useState<ProbeState>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const applyPreset = (p: ConnectionPreset) => {
+    setActivePreset(p.id)
+    setMlDraft(p.mlApi)
+    setOllamaDraft(p.ollama)
+    setMlProbe(null)
+    setOllamaProbe(null)
+    setMsg(`Preset “${p.label}” applied — run Test, then Save.`)
+  }
+
+  const runMlTest = async () => {
+    setMlProbe('loading')
+    setMsg(null)
+    const r = await probeMlApi(mlDraft)
+    setMlProbe(r)
+  }
+
+  const runOllamaTest = async () => {
+    setOllamaProbe('loading')
+    setMsg(null)
+    const r = await probeOllama(ollamaDraft)
+    setOllamaProbe(r)
+  }
+
+  const onSave = async () => {
+    setMsg(null)
+    if (!mlDraft.trim()) {
+      setMsg('ML API URL is required.')
+      return
+    }
+    const ml = await probeMlApi(mlDraft)
+    setMlProbe(ml)
+    if (!ml.ok) {
+      setMsg('Fix ML API connection before saving.')
+      return
+    }
+    setBrowserApiBase(mlDraft)
+    let ollamaOk = true
+    if (ollamaDraft.trim()) {
+      const ol = await probeOllama(ollamaDraft)
+      setOllamaProbe(ol)
+      if (ol.ok) setOllamaBase(ollamaDraft)
+      else {
+        ollamaOk = false
+        setMsg('ML API saved. Ollama test failed — fix the URL or clear it.')
+      }
+    } else {
+      setOllamaBase('')
+      setOllamaProbe(null)
+    }
+    if (ml.ok && ollamaOk) {
+      setMsg('Connections saved.')
+      onConnected()
+    } else if (ml.ok) {
+      onConnected()
+    }
+  }
+
+  const onClear = () => {
+    setBrowserApiBase('')
+    setOllamaBase('')
+    setMlDraft('')
+    setOllamaDraft('')
+    setMlProbe(null)
+    setOllamaProbe(null)
+    setActivePreset(null)
+    setMsg('Cleared saved URLs.')
+    onConnected()
+  }
+
+  const statusChip = (state: ProbeState, okLabel: string) => {
+    if (state === 'loading') return <span className="chip chip-warn">Testing…</span>
+    if (!state) return <span className="chip chip-muted">Not tested</span>
+    return state.ok ? (
+      <span className="chip chip-ok" title={state.detail}>
+        {okLabel}
+      </span>
+    ) : (
+      <span className="chip chip-err" title={state.detail}>
+        Failed
+      </span>
+    )
+  }
+
+  const inner = (
+    <>
+      {!embedded ? (
+        <header className="connect-hero">
+          <h1>Connect your services</h1>
+          <p className="sub">
+            Point this workspace at your <strong>ML API</strong> and <strong>Ollama (Llama)</strong> — GoDaddy VPS or
+            Mac mini. Pick a preset, test, then save.
+          </p>
+        </header>
+      ) : null}
+
+      <section className="card">
+        <h2 className="h3">Quick presets</h2>
+        <div className="preset-grid">
+          {presets.map((p) => {
+            const badge = presetBadge(p.id)
+            return (
+            <button
+              key={p.id}
+              type="button"
+              className={`preset-card${activePreset === p.id ? ' active' : ''}`}
+              onClick={() => applyPreset(p)}
+            >
+              <span className={`preset-badge ${badge.className}`}>{badge.label}</span>
+              <span className="preset-title">{p.label}</span>
+              <span className="preset-blurb">{p.blurb}</span>
+              <span className="preset-ports">
+                ML <code>{p.mlApi.replace(/^https?:\/\//, '')}</code>
+                {' · '}
+                Ollama <code>{p.ollama.replace(/^https?:\/\//, '')}</code>
+              </span>
+              {p.note ? <span className="preset-note">{p.note}</span> : null}
+            </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="card connect-form">
+        <h2 className="h3">Endpoints</h2>
+        <label className="label" htmlFor="ml-api-url">
+          ML API base URL <span className="req">required</span>
+        </label>
+        <input
+          id="ml-api-url"
+          className="input"
+          placeholder="http://127.0.0.1:8890"
+          value={mlDraft}
+          onChange={(e) => {
+            setMlDraft(e.target.value)
+            setMlProbe(null)
+          }}
+        />
+        <div className="row align-center">
+          {statusChip(mlProbe, 'ML OK')}
+          <button type="button" className="btn" onClick={() => void runMlTest()}>
+            Test ML API
+          </button>
+        </div>
+        {mlProbe && mlProbe !== 'loading' && !mlProbe.ok ? (
+          <p className="probe-detail err">{mlProbe.message}. {mlProbe.detail}</p>
+        ) : null}
+        {mlProbe && mlProbe !== 'loading' && mlProbe.ok && mlProbe.detail ? (
+          <p className="probe-detail ok">{mlProbe.detail}</p>
+        ) : null}
+
+        <label className="label mt" htmlFor="ollama-url">
+          Ollama / Llama URL <span className="muted">optional</span>
+        </label>
+        <input
+          id="ollama-url"
+          className="input"
+          placeholder="http://127.0.0.1:11434"
+          value={ollamaDraft}
+          onChange={(e) => {
+            setOllamaDraft(e.target.value)
+            setOllamaProbe(null)
+          }}
+        />
+        <div className="row align-center">
+          {statusChip(ollamaProbe, 'Ollama OK')}
+          <button type="button" className="btn" onClick={() => void runOllamaTest()}>
+            Test Ollama
+          </button>
+        </div>
+        {ollamaProbe && ollamaProbe !== 'loading' && !ollamaProbe.ok ? (
+          <p className="probe-detail err">{ollamaProbe.message}. {ollamaProbe.detail}</p>
+        ) : null}
+        {ollamaProbe && ollamaProbe !== 'loading' && ollamaProbe.ok && ollamaProbe.detail ? (
+          <p className="probe-detail ok">{ollamaProbe.detail}</p>
+        ) : null}
+
+        <div className="actions">
+          <button type="button" className="btn primary" onClick={() => void onSave()}>
+            {requireMl ? 'Save & open workspace' : 'Save connections'}
+          </button>
+          <button type="button" className="btn" onClick={onClear}>
+            Clear all
+          </button>
+        </div>
+        {msg ? <p className="connect-msg">{msg}</p> : null}
+      </section>
+
+      <section className="card">
+        <h2 className="h3">Port map (this project)</h2>
+        <div className="table-wrap">
+          <table className="port-table">
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Port</th>
+                <th>Host</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PORT_REFERENCE.map((row) => (
+                <tr key={row.port + row.service}>
+                  <td>{row.service}</td>
+                  <td>
+                    <code>{row.port}</code>
+                  </td>
+                  <td>{row.host}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted small mt">
+          On this GoDaddy box we saw <strong>Ollama on 11434</strong> and <strong>ML API on 8890</strong> when running.
+          Mac mini defaults: API <code>8040</code>, tunnel on VPS <code>8892</code>.
+        </p>
+      </section>
+    </>
+  )
+
+  if (embedded) return <div className="connect-page">{inner}</div>
+  return <div className="auth-layout">{inner}</div>
+}
 
 function previewCsvNaive(text: string, maxRows = 8): string[][] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(0, maxRows)
@@ -26,7 +388,6 @@ export default function App() {
   const apiConnected = Boolean(getApiBase())
 
   const [tab, setTab] = useState<Tab>('predict')
-  const [browserUrlDraft, setBrowserUrlDraft] = useState('')
   const [models, setModels] = useState<ModelRow[]>([])
   const [modelId, setModelId] = useState('')
   const [features, setFeatures] = useState<string[]>([])
@@ -51,10 +412,6 @@ export default function App() {
   const [trainType, setTrainType] = useState<'classification' | 'regression'>('classification')
   const [trainDescription, setTrainDescription] = useState('')
 
-  useEffect(() => {
-    setBrowserUrlDraft(typeof window !== 'undefined' ? localStorage.getItem('ML_API_BASE_URL') ?? '' : '')
-  }, [])
-
   const loadModels = useCallback(async () => {
     if (!getApiBase()) return
     setError(null)
@@ -70,21 +427,6 @@ export default function App() {
     if (!apiConnected) return
     void loadModels()
   }, [apiConnected, bumpApi, loadModels])
-
-  const onSaveBrowserApi = () => {
-    setError(null)
-    setSuccess(null)
-    setBrowserApiBase(browserUrlDraft)
-    bumpApi()
-    setSuccess('API URL saved in this browser. If calls fail, check HTTPS, CORS, and that the server is reachable.')
-  }
-
-  const onClearBrowserApi = () => {
-    setBrowserApiBase('')
-    setBrowserUrlDraft('')
-    bumpApi()
-    setSuccess(null)
-  }
 
   const onSelectModel = async (id: string) => {
     setModelId(id)
@@ -234,51 +576,15 @@ export default function App() {
   }
 
   if (!apiConnected) {
-    return (
-      <div className="page">
-        <div className="card warn">
-          <h1>Connect to your ML API</h1>
-          <p className="mb">
-            This static site (for example GitHub Pages) does not bundle a private API URL unless you set one at build
-            time. You can still point this browser at your server:
-          </p>
-          <ul className="list">
-            <li>
-              <strong>GitHub build:</strong> set repository variable <code>VITE_API_URL</code> (Actions → Variables) to
-              your public API, e.g. <code>https://your-host:8890</code>, then re-run <em>Deploy frontend to GitHub
-              Pages</em>.
-            </li>
-            <li>
-              <strong>This browser only:</strong> paste your API base URL below (no trailing slash). It is stored as{' '}
-              <code>ML_API_BASE_URL</code> in <code>localStorage</code>. Use HTTPS if the site is served over HTTPS.
-            </li>
-          </ul>
-          <label className="label" htmlFor="apiurl">
-            API base URL
-          </label>
-          <input
-            id="apiurl"
-            className="input"
-            placeholder="https://your-vps-or-domain:8890"
-            value={browserUrlDraft}
-            onChange={(e) => setBrowserUrlDraft(e.target.value)}
-          />
-          <div className="actions">
-            <button type="button" className="btn primary" onClick={onSaveBrowserApi}>
-              Save &amp; connect
-            </button>
-            <button type="button" className="btn" onClick={onClearBrowserApi}>
-              Clear saved URL
-            </button>
-          </div>
-          <p className="muted small mt">
-            Ensure your API allows this origin in CORS (e.g. <code>https://zub165.github.io</code> or your custom
-            domain).
-          </p>
-        </div>
-      </div>
-    )
+    return <ConnectPanel requireMl embedded={false} onConnected={() => bumpApi()} />
   }
+
+  const pageTitle =
+    tab === 'predict'
+      ? { title: 'Predict & feedback', sub: 'Run inference on registered models and submit clinician labels for retraining.' }
+      : tab === 'train'
+        ? { title: 'Train from CSV', sub: 'Upload a dataset to fit a new RandomForest and register it in the model registry.' }
+        : { title: 'Connections', sub: 'ML API and Ollama endpoints for GoDaddy VPS and Mac mini.' }
 
   const riskLabel =
     result && result.model_type === 'classification'
@@ -290,23 +596,11 @@ export default function App() {
         : ''
 
   return (
-    <div className="page">
-      <header className="header">
-        <h1>Clinical ML workspace</h1>
-        <p className="sub">
-          Train new models from CSV, run predictions, and save clinician labels for server-side retraining (FastAPI or
-          Django backend).
-        </p>
+    <AppShell tab={tab} setTab={setTab}>
+      <header className="page-header">
+        <h2>{pageTitle.title}</h2>
+        <p className="sub">{pageTitle.sub}</p>
       </header>
-
-      <nav className="tabs" aria-label="Primary">
-        <button type="button" className={tab === 'predict' ? 'tab active' : 'tab'} onClick={() => setTab('predict')}>
-          Predict &amp; feedback
-        </button>
-        <button type="button" className={tab === 'train' ? 'tab active' : 'tab'} onClick={() => setTab('train')}>
-          Train from CSV
-        </button>
-      </nav>
 
       {success ? (
         <div className="card ok" role="status">
@@ -319,7 +613,11 @@ export default function App() {
         </div>
       ) : null}
 
-      {tab === 'train' ? (
+      {tab === 'connect' ? (
+        <ConnectPanel requireMl={false} embedded onConnected={() => bumpApi()} />
+      ) : null}
+
+      {tab === 'train' && (
         <section className="card train">
           <h2>Train a new model (RandomForest)</h2>
           <p className="muted">
@@ -436,7 +734,9 @@ export default function App() {
             </div>
           </div>
         </section>
-      ) : (
+      )}
+
+      {tab === 'predict' && (
         <>
           <section className="grid">
             <div className="card">
@@ -567,10 +867,11 @@ export default function App() {
         </>
       )}
 
-      <footer className="footer muted">
-        API: <code>{getApiBase()}</code> — CORS must allow this origin. Advanced training uses <code>POST /train</code>{' '}
-        (multipart CSV + fields).
-      </footer>
-    </div>
+      {tab !== 'connect' ? (
+        <footer className="footer muted">
+          Endpoints are configured in <strong>Connections</strong>. Ensure CORS allows this origin.
+        </footer>
+      ) : null}
+    </AppShell>
   )
 }
