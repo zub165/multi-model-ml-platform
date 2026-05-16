@@ -24,7 +24,8 @@ export const PORT_REFERENCE = [
   { service: 'ML API (Django, optional)', port: '8891', host: 'GoDaddy VPS' },
   { service: 'ML API (Mac mini local)', port: '8040', host: 'Mac mini' },
   { service: 'Mac API via SSH tunnel on VPS', port: '8892', host: 'GoDaddy (tunnel target)' },
-  { service: 'Ollama / Llama (default)', port: '11434', host: 'Mac mini or GoDaddy' },
+  { service: 'Ollama / Llama (localhost)', port: '11434', host: 'Mac mini or GoDaddy' },
+  { service: 'Ollama via nginx (HTTPS)', port: '/ollama/ (443)', host: 'api.docsoncalls.com' },
   { service: 'React dev (Vite)', port: '5174', host: 'Your PC / Mac' },
 ] as const
 
@@ -40,11 +41,10 @@ export function buildConnectionPresets(): ConnectionPreset[] {
     },
     {
       id: 'godaddy-remote',
-      label: 'GoDaddy — HTTPS via nginx',
-      blurb: 'Production API behind nginx + Let’s Encrypt (GitHub Pages and remote browsers).',
+      label: 'GoDaddy — HTTPS (GitHub Pages)',
+      blurb: 'ML API and Ollama both behind nginx + Let’s Encrypt on api.docsoncalls.com.',
       mlApi: 'https://api.docsoncalls.com/ml',
-      ollama: 'http://127.0.0.1:11434',
-      note: 'Ollama stays on localhost unless you add a separate proxy. ML calls use HTTPS — safe for GitHub Pages.',
+      ollama: 'https://api.docsoncalls.com/ollama',
     },
     {
       id: 'godaddy-http-legacy',

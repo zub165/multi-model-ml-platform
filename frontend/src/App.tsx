@@ -355,7 +355,7 @@ function ConnectPanel({
             </thead>
             <tbody>
               {PORT_REFERENCE.map((row) => (
-                <tr key={row.port + row.service}>
+                <tr key={row.service}>
                   <td>{row.service}</td>
                   <td>
                     <code>{row.port}</code>

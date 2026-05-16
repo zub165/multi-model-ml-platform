@@ -182,6 +182,19 @@ VITE_PREVIEW_PORT=4174 npm run preview
 
 For production on the VPS, prefer **nginx** (or Caddy) to serve `frontend/dist` on one port and **proxy** `/predict` etc. to uvicorn, or keep split origins and tighten `CORS_ORIGINS`.
 
+### Doc On Calls VPS: HTTPS ML API + Ollama (nginx)
+
+On **api.docsoncalls.com** (Let’s Encrypt), this repo uses path-based proxies (see `scripts/nginx-ml-api-snippet.conf` and `scripts/nginx-ollama-snippet.conf`):
+
+| Path | Upstream | Public base (no trailing slash) |
+|------|-----------|----------------------------------|
+| `/ml/` | FastAPI on `127.0.0.1:8890` | `https://api.docsoncalls.com/ml` |
+| `/ollama/` | Ollama on `127.0.0.1:11434` | `https://api.docsoncalls.com/ollama` |
+
+Ollama must allow browser origins (e.g. GitHub Pages). Set **`OLLAMA_ORIGINS`** on the `ollama` systemd service (comma-separated), e.g. `https://zub165.github.io,https://api.docsoncalls.com`. The nginx block sets **`proxy_set_header Host 127.0.0.1:11434`** so Ollama accepts the proxied request (otherwise you may see **403**).
+
+GitHub Actions variables for Pages: **`VITE_API_URL`** = `https://api.docsoncalls.com/ml`, **`VITE_OLLAMA_URL`** = `https://api.docsoncalls.com/ollama`.
+
 ## GitHub (code + Pages for the React app)
 
 ### Push this repository
@@ -198,7 +211,7 @@ git push -u origin main
 Workflow: `.github/workflows/deploy-frontend-pages.yml` (runs on pushes to `main` / `master` that touch `frontend/`).
 
 1. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. **Settings → Secrets and variables → Actions → Variables** → add **`VITE_API_URL`** with your **public** API base (no trailing slash), e.g. `https://your-domain:8890`.  
+2. **Settings → Secrets and variables → Actions → Variables** → add **`VITE_API_URL`** (HTTPS, no trailing slash), e.g. `https://api.docsoncalls.com/ml`, and **`VITE_OLLAMA_URL`** for Ollama behind the same host, e.g. `https://api.docsoncalls.com/ollama`.  
    - If the site is served over **HTTPS**, the API should also be **HTTPS**; otherwise the browser may block requests (mixed content).  
 3. **CORS**: add your Pages origin to the API, e.g. `https://<owner>.github.io` or `https://<owner>.github.io/<repo>/` in `CORS_ORIGINS` / Django `CORS_ALLOWED_ORIGINS`.
 4. Push to `main`; the **Actions** tab should show **Deploy frontend to GitHub Pages**. Your site URL appears in the workflow run and under **Pages**.
@@ -250,17 +263,20 @@ Run Django on a **different port** than FastAPI, e.g. **`8891`**:
 
 | Variable / key | Purpose | Example |
 |----------------|---------|---------|
-| `VITE_API_URL` | API base URL (no trailing slash), baked in at **build** time | `http://127.0.0.1:8890` or `https://api.yourdomain.com:8890` |
+| `VITE_API_URL` | API base URL (no trailing slash), baked in at **build** time | `https://api.docsoncalls.com/ml` |
+| `VITE_OLLAMA_URL` | Ollama base URL (no trailing slash), optional | `https://api.docsoncalls.com/ollama` or `http://127.0.0.1:11434` |
 | `VITE_DEV_PORT` | Local Vite dev port | `5174` |
 | `VITE_PREVIEW_PORT` | `vite preview` port | `4174` |
 | `VITE_BASE_PATH` | Subpath for GitHub Pages (usually set by CI only) | `/multi-model-ml-platform/` |
 | `localStorage` **`ML_API_BASE_URL`** | Set from the SPA “Connect” screen (GitHub Pages) without rebuilding | same as `VITE_API_URL` |
+| `localStorage` **`ML_OLLAMA_BASE_URL`** | Same for Ollama | same as `VITE_OLLAMA_URL` |
 
 ### GitHub Actions (repository **Variables**)
 
 | Name | Purpose |
 |------|---------|
-| `VITE_API_URL` | Public API URL for the Pages build (HTTPS if the site is HTTPS) |
+| `VITE_API_URL` | Public ML API URL for the Pages build (HTTPS) |
+| `VITE_OLLAMA_URL` | Public Ollama URL when proxied over HTTPS (optional) |
 
 ### Mac mini scripts (environment or arguments)
 

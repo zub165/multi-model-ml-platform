@@ -1,6 +1,6 @@
 # Build the Vite React app and publish static files to GitHub Pages.
 # Prereqs: Settings → Pages → Source: "GitHub Actions".
-# Set repository variable VITE_API_URL (Settings → Secrets and variables → Actions → Variables)
+# Set repository variables VITE_API_URL and VITE_OLLAMA_URL (Settings → Secrets and variables → Actions → Variables)
 # to your public API origin, e.g. https://api.example.com or https://your-vps:8890 (HTTPS avoids mixed-content blocks).
 
 name: Deploy frontend to GitHub Pages
@@ -51,9 +51,13 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_OLLAMA_URL: ${{ vars.VITE_OLLAMA_URL }}
         run: |
           if [ -z "${VITE_API_URL:-}" ]; then
             echo "::warning::VITE_API_URL is unset. The SPA will build without a baked-in API URL (configure screen in the app). Set repo variable VITE_API_URL and re-run this workflow to point at your live API."
+          fi
+          if [ -z "${VITE_OLLAMA_URL:-}" ]; then
+            echo "::warning::VITE_OLLAMA_URL is unset. Ollama URL can still be set in the app Connections screen (localStorage). Set VITE_OLLAMA_URL for GitHub Pages defaults."
           fi
           npm ci
           npm run build
