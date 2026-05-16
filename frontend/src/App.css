@@ -744,6 +744,21 @@ table.preview tr:nth-child(even) td {
   animation: shimmer 1.2s ease infinite;
 }
 
+textarea.input.ollama-prompt {
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
+  line-height: 1.45;
+}
+
+.ollama-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
 @keyframes shimmer {
   0% {
     background-position: 100% 0;

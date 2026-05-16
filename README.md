@@ -6,7 +6,7 @@ Monorepo for a **FastAPI** or **Django** multi-model registry (predictions, uplo
 
 - `backend/` — FastAPI app (`main.py`), SQLite storage (`storage.py`), training helper (`train_any_model.py`), `models/` for `.pkl` files.
 - `django_backend/` — Django project `ml_platform` + app `ml_api` (ORM-backed feedback/logs, same routes as FastAPI).
-- `frontend/` — React SPA; reads `VITE_API_URL` at build/dev time.
+- `frontend/` — React SPA; reads `VITE_API_URL` and optional `VITE_OLLAMA_URL` at build/dev time. Includes **Llama (Ollama)** tab for prompts over HTTPS (GitHub Pages); CSV **Train** tab fits sklearn models on the ML API, not Llama fine-tuning.
 - `scripts/list_listening_ports.sh` — print listening TCP ports so you can pick **free** ports on the VPS.
 
 ## Pick free ports (GoDaddy VPS)

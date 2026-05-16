@@ -275,3 +275,27 @@ export async function trainFromCsv(form: FormData) {
     artifact: string
   }
 }
+
+/** List Ollama model names (GET /api/tags). */
+export async function ollamaFetchModelNames(baseUrl: string): Promise<string[]> {
+  const b = stripTrailingSlash(baseUrl.trim())
+  const res = await fetch(`${b}/api/tags`, { signal: AbortSignal.timeout(20000) })
+  const data = (await parseJson(res)) as { models?: { name?: string }[] }
+  if (!res.ok) throw new Error(formatDetail(data))
+  return (data.models ?? []).map((m) => m.name).filter(Boolean) as string[]
+}
+
+/** Single completion (stream: false). */
+export async function ollamaGenerate(baseUrl: string, model: string, prompt: string): Promise<string> {
+  const b = stripTrailingSlash(baseUrl.trim())
+  const res = await fetch(`${b}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, prompt, stream: false }),
+    signal: AbortSignal.timeout(120000),
+  })
+  const data = (await parseJson(res)) as { response?: string; error?: string }
+  if (!res.ok) throw new Error(data.error || formatDetail(data))
+  if (typeof data.response === 'string') return data.response
+  throw new Error('Unexpected response from Ollama')
+}

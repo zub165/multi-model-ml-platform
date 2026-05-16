@@ -6,6 +6,8 @@ import {
   fetchStats,
   getApiBase,
   getOllamaBase,
+  ollamaFetchModelNames,
+  ollamaGenerate,
   PORT_REFERENCE,
   predict,
   probeMlApi,
@@ -22,7 +24,7 @@ import './App.css'
 
 type ModelRow = { model_id: string; info: { description?: string } }
 
-type Tab = 'predict' | 'train' | 'connect'
+type Tab = 'predict' | 'train' | 'llama' | 'connect'
 
 type ProbeState = ProbeResult | null | 'loading'
 
@@ -56,6 +58,14 @@ function IconLink() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  )
+}
+
+function IconSparkles() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
     </svg>
   )
 }
@@ -106,6 +116,14 @@ function AppShell({
           >
             <IconUpload />
             Train from CSV
+          </button>
+          <button
+            type="button"
+            className={tab === 'llama' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setTab('llama')}
+          >
+            <IconSparkles />
+            Llama (Ollama)
           </button>
           <button
             type="button"
@@ -412,6 +430,11 @@ export default function App() {
   const [trainType, setTrainType] = useState<'classification' | 'regression'>('classification')
   const [trainDescription, setTrainDescription] = useState('')
 
+  const [ollamaNames, setOllamaNames] = useState<string[]>([])
+  const [ollamaPick, setOllamaPick] = useState('')
+  const [ollamaPrompt, setOllamaPrompt] = useState('')
+  const [ollamaReply, setOllamaReply] = useState('')
+
   const loadModels = useCallback(async () => {
     if (!getApiBase()) return
     setError(null)
@@ -422,6 +445,59 @@ export default function App() {
       setError(e instanceof Error ? e.message : 'Failed to load models')
     }
   }, [])
+
+  useEffect(() => {
+    if (tab !== 'llama') return
+    const base = getOllamaBase()
+    if (!base) {
+      setOllamaNames([])
+      setOllamaPick('')
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const names = await ollamaFetchModelNames(base)
+        if (!cancelled) {
+          setOllamaNames(names)
+          setOllamaPick((p) => (p && names.includes(p) ? p : names[0] ?? ''))
+        }
+      } catch {
+        if (!cancelled) {
+          setOllamaNames([])
+          setOllamaPick('')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [tab, bumpApi])
+
+  const onOllamaGenerate = async () => {
+    const base = getOllamaBase()
+    if (!base || !ollamaPick.trim()) {
+      setError('Set an Ollama URL under Connections and pick a model.')
+      return
+    }
+    if (!ollamaPrompt.trim()) {
+      setError('Enter a prompt.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+    setOllamaReply('')
+    try {
+      const text = await ollamaGenerate(base, ollamaPick.trim(), ollamaPrompt.trim())
+      setOllamaReply(text)
+      setSuccess('Ollama response received.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ollama request failed')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!apiConnected) return
@@ -583,8 +659,13 @@ export default function App() {
     tab === 'predict'
       ? { title: 'Predict & feedback', sub: 'Run inference on registered models and submit clinician labels for retraining.' }
       : tab === 'train'
-        ? { title: 'Train from CSV', sub: 'Upload a dataset to fit a new RandomForest and register it in the model registry.' }
-        : { title: 'Connections', sub: 'ML API and Ollama endpoints for GoDaddy VPS and Mac mini.' }
+        ? { title: 'Train from CSV', sub: 'Upload a dataset to fit a new RandomForest (.pkl) on the ML API — not Llama fine-tuning.' }
+        : tab === 'llama'
+          ? {
+              title: 'Llama (Ollama)',
+              sub: 'Run prompts against models served by Ollama. Installing or custom-building Llama weights is done on the server (SSH: ollama pull / ollama create).',
+            }
+          : { title: 'Connections', sub: 'ML API and Ollama endpoints for GoDaddy VPS and Mac mini.' }
 
   const riskLabel =
     result && result.model_type === 'classification'
@@ -733,6 +814,78 @@ export default function App() {
               )}
             </div>
           </div>
+        </section>
+      )}
+
+      {tab === 'llama' && (
+        <section className="card">
+          <h2>Ollama chat</h2>
+          {!getOllamaBase() ? (
+            <p className="muted">
+              Set your <strong>Ollama URL</strong> under <strong>Connections</strong> (for GitHub Pages use{' '}
+              <code>https://api.docsoncalls.com/ollama</code>).
+            </p>
+          ) : (
+            <>
+              <p className="muted mb">
+                Base: <code>{getOllamaBase()}</code> — models listed from <code>/api/tags</code>. This uses{' '}
+                <code>POST /api/generate</code> with <code>stream: false</code> (simpler for HTTPS).
+              </p>
+              <label className="label" htmlFor="ollama-model">
+                Ollama model
+              </label>
+              {ollamaNames.length === 0 ? (
+                <p className="muted">No models returned — check the server has pulled models (<code>ollama pull …</code>).</p>
+              ) : (
+                <select
+                  id="ollama-model"
+                  className="input"
+                  value={ollamaPick}
+                  disabled={loading}
+                  onChange={(e) => setOllamaPick(e.target.value)}
+                >
+                  {ollamaNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <label className="label mt" htmlFor="ollama-prompt">
+                Prompt
+              </label>
+              <textarea
+                id="ollama-prompt"
+                className="input ollama-prompt"
+                rows={6}
+                placeholder="Ask something…"
+                value={ollamaPrompt}
+                disabled={loading}
+                onChange={(e) => setOllamaPrompt(e.target.value)}
+              />
+              <div className="actions">
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={loading || !ollamaPick || !ollamaPrompt.trim()}
+                  onClick={() => void onOllamaGenerate()}
+                >
+                  Run with Ollama
+                </button>
+              </div>
+              {ollamaReply ? (
+                <div className="card result mt" style={{ marginTop: 16 }}>
+                  <h3 className="h3">Response</h3>
+                  <pre className="ollama-pre">{ollamaReply}</pre>
+                </div>
+              ) : null}
+              <p className="muted small mt">
+                <strong>Training / new Llama variants:</strong> SSH to the VPS and use{' '}
+                <code>ollama pull &lt;model&gt;</code> or a <code>Modelfile</code> with <code>ollama create</code>. The
+                browser cannot safely run those commands.
+              </p>
+            </>
+          )}
         </section>
       )}
 
