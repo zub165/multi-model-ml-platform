@@ -338,9 +338,14 @@ code {
   color: var(--text);
 }
 
-.card + .card,
-.card.result {
-  margin-top: 20px;
+.card.ckd-guide {
+  margin-bottom: 18px;
+  border-color: rgba(34, 211, 238, 0.35);
+  background: linear-gradient(145deg, rgba(34, 211, 238, 0.08), rgba(22, 30, 52, 0.72));
+}
+
+.card.ckd-guide .h3 {
+  margin-top: 0;
 }
 
 .card.ok {
@@ -358,6 +363,7 @@ code {
 }
 
 .card.result {
+  margin-top: 20px;
   border-color: rgba(99, 102, 241, 0.35);
   background: linear-gradient(145deg, rgba(99, 102, 241, 0.12), rgba(22, 30, 52, 0.8));
 }

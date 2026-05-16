@@ -8,6 +8,21 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 
+def make_rf_classifier() -> RandomForestClassifier:
+    """Clinical risk defaults (matches FastAPI train_any_model)."""
+    return RandomForestClassifier(
+        n_estimators=200,
+        random_state=42,
+        class_weight="balanced",
+        min_samples_leaf=2,
+        max_depth=12,
+    )
+
+
+def make_rf_regressor() -> RandomForestRegressor:
+    return RandomForestRegressor(n_estimators=100, random_state=42, min_samples_leaf=2)
+
+
 def train_model_from_dataframe(
     df: pd.DataFrame,
     target_column: str,
@@ -22,9 +37,9 @@ def train_model_from_dataframe(
         raise ValueError("No feature columns remain after dropping the target column")
 
     if model_type == "classification":
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model = make_rf_classifier()
     elif model_type == "regression":
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model = make_rf_regressor()
     else:
         raise ValueError("model_type must be 'classification' or 'regression'")
 

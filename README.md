@@ -299,7 +299,9 @@ Replace ports if you changed them. **SSH (22)** must stay allowed for tunnels.
 
 1. Clinician runs **predict** → optional row in `prediction_log`.
 2. Clinician submits **feedback** with the **true** `actual_outcome` for the same feature vector → row in `feedback`.
-3. After enough rows, **retrain** fits a new `RandomForest*` on labeled feedback only (same feature list as the model metadata) and overwrites the `model_id` artifact, then reloads it in memory.
+3. After enough rows (default **10**), **retrain** fits a new `RandomForestClassifier` with **`class_weight="balanced"`** and depth limits suited to small clinical batches, overwrites the `model_id` artifact, and reloads it in memory.
+
+**CKD (`ckd_risk`) tips:** keep feature scales consistent with training data; collect diverse positive/negative cases so retrain is not biased; for a full refresh, use **Train from CSV** with more rows than the feedback-only path.
 
 This is a pragmatic feedback loop; for production you would add auth, audit trails, versioning, drift monitoring, and scheduled retrains instead of a manual button.
 

@@ -891,6 +891,36 @@ export default function App() {
 
       {tab === 'predict' && (
         <>
+          {modelId === 'ckd_risk' ? (
+            <section className="card ckd-guide">
+              <h2 className="h3">Improving CKD risk (ckd_risk)</h2>
+              <ul className="list muted small">
+                <li>
+                  <strong>Learning loop:</strong> Run a prediction, then save the <strong>confirmed</strong> class (0/1)
+                  under the result. When you have <strong>10+</strong> labeled rows, use <strong>Retrain</strong> to
+                  refit the forest from real outcomes.
+                </li>
+                <li>
+                  <strong>Bulk upgrade:</strong> Use <strong>Train from CSV</strong> with a larger, curated dataset
+                  (same feature names) to replace the model file.
+                </li>
+                <li>
+                  <strong>Typical inputs:</strong> <code>age</code> (years), <code>diabetes</code> (0/1),{' '}
+                  <code>systolic_bp</code> (mmHg), <code>creatinine</code> (mg/dL, same scale as training data),{' '}
+                  <code>proteinuria</code> (ordinal 0–N consistent with your CSV).
+                </li>
+              </ul>
+              {stats != null && stats < 10 ? (
+                <p className="muted small mt">
+                  Retrain unlocks at <strong>10</strong> feedback rows — you have <strong>{stats}</strong>.
+                </p>
+              ) : stats != null && stats >= 10 ? (
+                <p className="muted small mt">
+                  You have <strong>{stats}</strong> labeled rows — you can run <strong>Retrain</strong>.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           <section className="grid">
             <div className="card">
               <h2>Model</h2>

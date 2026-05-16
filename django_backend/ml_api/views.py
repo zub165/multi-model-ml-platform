@@ -11,11 +11,10 @@ import pandas as pd
 from django.conf import settings
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from ml_api import services
 from ml_api.registry import registry
-from ml_api.training import train_model_from_dataframe
+from ml_api.training import make_rf_classifier, make_rf_regressor, train_model_from_dataframe
 
 
 def _detail(msg: str, status: int = 400) -> JsonResponse:
@@ -328,9 +327,9 @@ def retrain(request: HttpRequest) -> JsonResponse:
     y = pd.Series(y_vals, name="label")
 
     if model_type == "classification":
-        new_model = RandomForestClassifier(n_estimators=150, random_state=42)
+        new_model = make_rf_classifier()
     elif model_type == "regression":
-        new_model = RandomForestRegressor(n_estimators=150, random_state=42)
+        new_model = make_rf_regressor()
     else:
         return _detail(f"Unsupported model_type '{model_type}' for retrain", 400)
 

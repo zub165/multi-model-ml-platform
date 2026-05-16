@@ -18,10 +18,9 @@ import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from storage import Storage
-from train_any_model import train_model_from_dataframe
+from train_any_model import make_rf_classifier, make_rf_regressor, train_model_from_dataframe
 
 
 def _env_int(name: str, default: int) -> int:
@@ -396,9 +395,9 @@ def retrain(req: RetrainRequest) -> Dict[str, Any]:
     y = pd.Series(y_vals, name="label")
 
     if model_type == "classification":
-        new_model = RandomForestClassifier(n_estimators=150, random_state=42)
+        new_model = make_rf_classifier()
     elif model_type == "regression":
-        new_model = RandomForestRegressor(n_estimators=150, random_state=42)
+        new_model = make_rf_regressor()
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported model_type '{model_type}' for retrain")
 
