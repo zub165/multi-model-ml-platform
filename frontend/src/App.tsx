@@ -8,6 +8,7 @@ import {
   getOllamaBase,
   ollamaFetchModelNames,
   ollamaGenerate,
+  pickDefaultOllamaModel,
   PORT_REFERENCE,
   predict,
   probeMlApi,
@@ -213,21 +214,17 @@ function ConnectPanel({
     if (ollamaDraft.trim()) {
       const ol = await probeOllama(ollamaDraft)
       setOllamaProbe(ol)
-      if (ol.ok) setOllamaBase(ollamaDraft)
-      else {
+      setOllamaBase(ollamaDraft)
+      if (!ol.ok) {
         ollamaOk = false
-        setMsg('ML API saved. Ollama test failed — fix the URL or clear it.')
+        setMsg('ML API + Ollama URL saved, but Ollama test failed — check URL (https://api.docsoncalls.com/ollama).')
       }
     } else {
       setOllamaBase('')
       setOllamaProbe(null)
     }
-    if (ml.ok && ollamaOk) {
-      setMsg('Connections saved.')
-      onConnected()
-    } else if (ml.ok) {
-      onConnected()
-    }
+    if (ml.ok && ollamaOk) setMsg('Connections saved.')
+    if (ml.ok) onConnected()
   }
 
   const onClear = () => {
@@ -434,6 +431,7 @@ export default function App() {
   const [ollamaPick, setOllamaPick] = useState('')
   const [ollamaPrompt, setOllamaPrompt] = useState('')
   const [ollamaReply, setOllamaReply] = useState('')
+  const [ollamaLoadError, setOllamaLoadError] = useState<string | null>(null)
 
   const loadModels = useCallback(async () => {
     if (!getApiBase()) return
@@ -452,20 +450,23 @@ export default function App() {
     if (!base) {
       setOllamaNames([])
       setOllamaPick('')
+      setOllamaLoadError(null)
       return
     }
     let cancelled = false
     void (async () => {
+      setOllamaLoadError(null)
       try {
         const names = await ollamaFetchModelNames(base)
         if (!cancelled) {
           setOllamaNames(names)
-          setOllamaPick((p) => (p && names.includes(p) ? p : names[0] ?? ''))
+          setOllamaPick((p) => (p && names.includes(p) ? p : pickDefaultOllamaModel(names)))
         }
-      } catch {
+      } catch (e) {
         if (!cancelled) {
           setOllamaNames([])
           setOllamaPick('')
+          setOllamaLoadError(e instanceof Error ? e.message : 'Could not load models from Ollama')
         }
       }
     })()
@@ -834,8 +835,15 @@ export default function App() {
               <label className="label" htmlFor="ollama-model">
                 Ollama model
               </label>
+              {ollamaLoadError ? (
+                <p className="probe-detail err">{ollamaLoadError}</p>
+              ) : null}
               {ollamaNames.length === 0 ? (
-                <p className="muted">No models returned — check the server has pulled models (<code>ollama pull …</code>).</p>
+                <p className="muted">
+                  {ollamaLoadError
+                    ? 'Fix the Ollama URL under Connections, then reopen this tab.'
+                    : 'No models returned — on the VPS run: ollama pull qwen2.5:0.5b-instruct'}
+                </p>
               ) : (
                 <select
                   id="ollama-model"
@@ -847,6 +855,11 @@ export default function App() {
                   {ollamaNames.map((n) => (
                     <option key={n} value={n}>
                       {n}
+                      {n.toLowerCase().includes('docsoncalls-assistant')
+                        ? ' (avoid — returns API docs)'
+                        : n.includes('qwen2.5')
+                          ? ' (recommended)'
+                          : ''}
                     </option>
                   ))}
                 </select>

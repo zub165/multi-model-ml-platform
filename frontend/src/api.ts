@@ -276,26 +276,53 @@ export async function trainFromCsv(form: FormData) {
   }
 }
 
+/** Prefer general instruct models; avoid API-tuned custom tags that hallucinate curl/docs. */
+export function pickDefaultOllamaModel(names: string[]): string {
+  if (!names.length) return ''
+  const ranked = [...names].sort((a, b) => ollamaModelRank(a) - ollamaModelRank(b))
+  return ranked[0] ?? ''
+}
+
+function ollamaModelRank(name: string): number {
+  const n = name.toLowerCase()
+  if (n.includes('docsoncalls-assistant')) return 100
+  if (n.startsWith('qwen2.5') && n.includes('instruct')) return 0
+  if (n.includes('ckd-assistant')) return 10
+  if (n.includes('instruct')) return 20
+  if (n.includes('llama3')) return 25
+  return 50
+}
+
+function ollamaFetchSignal(ms: number): AbortSignal | undefined {
+  if (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) {
+    return AbortSignal.timeout(ms)
+  }
+  return undefined
+}
+
 /** List Ollama model names (GET /api/tags). */
 export async function ollamaFetchModelNames(baseUrl: string): Promise<string[]> {
   const b = stripTrailingSlash(baseUrl.trim())
-  const res = await fetch(`${b}/api/tags`, { signal: AbortSignal.timeout(20000) })
-  const data = (await parseJson(res)) as { models?: { name?: string }[] }
-  if (!res.ok) throw new Error(formatDetail(data))
+  if (!b) throw new Error('Ollama URL is empty')
+  const res = await fetch(`${b}/api/tags`, { signal: ollamaFetchSignal(20000) })
+  const data = (await parseJson(res)) as { models?: { name?: string }[]; error?: string }
+  if (!res.ok) throw new Error(data.error || formatDetail(data))
   return (data.models ?? []).map((m) => m.name).filter(Boolean) as string[]
 }
 
 /** Single completion (stream: false). */
 export async function ollamaGenerate(baseUrl: string, model: string, prompt: string): Promise<string> {
   const b = stripTrailingSlash(baseUrl.trim())
+  if (!b) throw new Error('Ollama URL is empty')
   const res = await fetch(`${b}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, prompt, stream: false }),
-    signal: AbortSignal.timeout(120000),
+    signal: ollamaFetchSignal(120000),
   })
   const data = (await parseJson(res)) as { response?: string; error?: string }
-  if (!res.ok) throw new Error(data.error || formatDetail(data))
-  if (typeof data.response === 'string') return data.response
-  throw new Error('Unexpected response from Ollama')
+  if (data.error) throw new Error(data.error)
+  if (!res.ok) throw new Error(formatDetail(data))
+  if (typeof data.response === 'string' && data.response.trim()) return data.response
+  throw new Error('Empty response from Ollama — try another model (e.g. qwen2.5:0.5b-instruct).')
 }
